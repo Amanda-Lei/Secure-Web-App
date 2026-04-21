@@ -16,12 +16,14 @@ session_manager = SessionManager()
 
 users_file = "data/users.json"
 sess_file = "data/sessions.json"
+docs_file = "data/documents.json"
 
-def load_db(file_path):
-    with open(file_path, 'r') as f: return json.load(f)
+def load_db(file_path): return storage.load_encrypted(file_path)
+def save_db(file_path, data): storage.save_encrypted(file_path, data)
 
-def save_db(file_path, data):
-    with open(file_path, 'w') as f: json.dump(data, f)
+save_db(users_file, {})
+save_db(sess_file, {})
+save_db(docs_file, {})
 
 login_attempts = {}  # { ip: timestamps }
 
@@ -41,6 +43,25 @@ def load_user_session():
             g.user = None
     else:
         g.user = None
+
+@app.after_request
+def set_security_headers(response):
+    # response.headers['Content-Security-Policy'] = ("default-src 'self'; " "script-src 'self' 'unsafe-inline'; " "style-src 'self' 'unsafe-inline'; " "img-src 'self' data:; " "font-src 'self'; " "connect-src 'self'; " "frame-ancestors 'none'")
+    response.headers['Content-Security-Policy'] = ( # edited to allow bootstrap
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "img-src 'self' data:; "
+        "font-src 'self' https://cdn.jsdelivr.net; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = ('geolocation=(), microphone=(), camera=()')
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -114,6 +135,8 @@ def register():
         # Validate inputs
         if not re.match(r'^[a-zA-Z0-9_]{3,20}$', username):
             return render_template("register.html", error="Invalid username format")
+        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+            return render_template("register.html", error="Invalid email format")
         if password != confirm_password:
             return render_template("register.html", error="Passwords do not match")
         if len(password) < 12 or not re.search(r'[A-Z]', password) or not re.search(r'[a-z]', password) or not re.search(r'[0-9]', password) or not re.search(r'[!@#$%^&*]', password):
@@ -121,6 +144,8 @@ def register():
 
         if username in users:
             return render_template("register.html", error="Username already exists")
+        if any(u.get('email') == email for u in users.values()):
+            return render_template("register.html", error="Email already registered")
 
         # Hash password
         salt = bcrypt.gensalt(rounds=12)
@@ -164,10 +189,26 @@ def require_role(role):
     return decorator
 
 
+# @app.route('/dashboard')
+# @require_auth
+# def dashboard():
+#     return render_template('dashboard.html', user=g.user)
+
 @app.route('/dashboard')
 @require_auth
 def dashboard():
-    return render_template('dashboard.html', user=g.user)
+    all_docs = load_db('data/documents.json')
+    my_docs = {}
+    shared_docs = {}
+    
+    # filter documents based on user access
+    for doc_id, doc in all_docs.items():
+        if doc['owner'] == g.user['username']:
+            my_docs[doc_id] = doc
+        elif g.user['username'] in doc['shared_with'] or g.user['role'] == 'admin':
+            shared_docs[doc_id] = doc
+            
+    return render_template('dashboard.html', user=g.user, my_docs=my_docs, shared_docs=shared_docs)
 
 @app.route('/admin/dashboard')
 @require_auth

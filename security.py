@@ -40,17 +40,16 @@ class SessionManager:
     def __init__(self, timeout=1800):  # 30 minutes
         self.timeout = timeout
         self.sessions_file = 'data/sessions.json'
+        self.storage = EncryptedStorage()
 
     def load_sessions(self):
         try:
-            with open(self.sessions_file, 'r') as f:
-                return json.load(f)
+            return self.storage.load_encrypted(self.sessions_file)
         except FileNotFoundError:
             return {}
 
     def save_sessions(self, sessions):
-        with open(self.sessions_file, 'w') as f:
-            json.dump(sessions, f)
+        self.storage.save_encrypted(self.sessions_file, sessions)
 
     def create_session(self, user_id):
         """Create new session token"""
@@ -102,18 +101,20 @@ class SessionManager:
         self.save_sessions(sessions)
 
 class SecurityLogger:
-    def __init__(self, log_file='logs/security.log'):
-        self.logger = logging.getLogger('security')
-        self.logger.setLevel(logging.INFO)
+    def __init__(self, log_dir='logs'):
+        # Security Log
+        self.sec_logger = logging.getLogger('security')
+        self.sec_logger.setLevel(logging.INFO)
+        sec_handler = logging.FileHandler(f'{log_dir}/security.log')
+        sec_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        self.sec_logger.addHandler(sec_handler)
 
-        handler = logging.FileHandler(log_file)
-
-        formatter = logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s'
-        )
-
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
+        # Access Log
+        self.acc_logger = logging.getLogger('access')
+        self.acc_logger.setLevel(logging.INFO)
+        acc_handler = logging.FileHandler(f'{log_dir}/access.log')
+        acc_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        self.acc_logger.addHandler(acc_handler)
 
     def log_event(self, event_type, user_id, details, severity='INFO'):
         """Log security event"""
@@ -130,11 +131,14 @@ class SecurityLogger:
 
         msg = json.dumps(log_entry)
 
-        if severity == 'CRITICAL':
-            self.logger.critical(msg)
-        elif severity == 'ERROR':
-            self.logger.error(msg)
-        elif severity == 'WARNING':
-            self.logger.warning(msg)
+        if event_type == 'DATA_ACCESS':
+            self.acc_logger.info(msg)
         else:
-            self.logger.info(msg)
+            if severity == 'CRITICAL':
+                self.sec_logger.critical(msg)
+            elif severity == 'ERROR':
+                self.sec_logger.error(msg)
+            elif severity == 'WARNING':
+                self.sec_logger.warning(msg)
+            else:
+                self.sec_logger.info(msg)

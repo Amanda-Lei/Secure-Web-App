@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 import json
 import re
 import html
 import bcrypt
 import time
+import secrets
 
 app = Flask(__name__)
 
@@ -16,21 +17,91 @@ def load_db(file_path):
 def save_db(file_path, data):
     with open(file_path, 'w') as f: json.dump(data, f)
 
+def log_event(event, username, ip, message):
+    print(f"[{event}] User: {username}, IP: {ip}, Info: {message}")
+
+login_attempts = {}  # { ip: timestamps }
+
+def create_session(self, user_id):
+    """Create new session token"""
+    token = secrets.token_urlsafe(32)
+    session = {
+        'token': token,
+        'user_id': user_id,
+        'created_at': time.time(),
+        'last_activity': time.time(),
+        'ip_address': request.remote_addr,
+        'user_agent': request.headers.get('User-Agent')
+    }
+    # Save session
+    sessions = self.load_sessions()
+    sessions[token] = session
+    self.save_sessions(sessions)
+    return token
+
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
+        ip = request.remote_addr
+        username = html.escape(request.form["username"])
         password = request.form["password"]
 
-        return f"Logged in as {username}"
+        users = load_db(users_file)
+
+        # Rate limiting: Max 10 login attempts per IP per minute
+        now = time.time()
+        attempts = login_attempts.get(ip, [])
+        attempts = [t for t in attempts if now - t < 60]
+
+        if len(attempts) >= 10:
+            log_event("RATE_LIMIT", username, ip, "Too many attempts")
+            return "Too many login attempts. Try again later."
+
+        attempts.append(now)
+        login_attempts[ip] = attempts
+
+        user = users.get(username)
+        # does user exist
+        if not user:
+            log_event("LOGIN_FAILED", username, ip, "User not found")
+            return render_template("login.html", error="Invalid credentials")
+        
+        # is user locked out
+        if user.get("locked_until") and now < user["locked_until"]:
+            log_event("ACCOUNT_LOCKED", username, ip, "Account still locked")
+            return render_template("login.html", error="Account locked. Try again later.")
+        
+        # Implement account lockout after 5 failed attempts (15 minutes)
+        if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):    
+            user["failed_attempts"] = user.get("failed_attempts", 0) + 1
+
+            if user["failed_attempts"] >= 5:
+                user["locked_until"] = now + 900
+                log_event("ACCOUNT_LOCKED", username, ip, "5 failed attempts")
+
+            save_db(users_file, users)
+
+            log_event("LOGIN_FAILED", username, ip, "Wrong password")
+
+            return render_template("login.html", error="Invalid credentials")
+        
+        # login success
+
+        user["failed_attempts"] = 0
+        user["locked_until"] = None
+        save_db(users_file, users)
+
+        # create_session(username)
+
+        log_event("LOGIN_SUCCESS", username, ip, "Successful login")
+
+        return render_template("main.html")
 
     return render_template("login.html")
-
 
 @app.route("/register", methods=["GET", "POST"])
 def register():

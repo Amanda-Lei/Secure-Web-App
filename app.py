@@ -1,12 +1,17 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, make_response
 import json
 import re
 import html
 import bcrypt
 import time
 import secrets
+from security import EncryptedStorage, SessionManager, SecurityLogger
 
 app = Flask(__name__)
+
+storage = EncryptedStorage()
+security_log = SecurityLogger()
+session_manager = SessionManager()
 
 users_file = "data/users.json"
 sess_file = "data/sessions.json"
@@ -17,27 +22,7 @@ def load_db(file_path):
 def save_db(file_path, data):
     with open(file_path, 'w') as f: json.dump(data, f)
 
-def log_event(event, username, ip, message):
-    print(f"[{event}] User: {username}, IP: {ip}, Info: {message}")
-
 login_attempts = {}  # { ip: timestamps }
-
-def create_session(self, user_id):
-    """Create new session token"""
-    token = secrets.token_urlsafe(32)
-    session = {
-        'token': token,
-        'user_id': user_id,
-        'created_at': time.time(),
-        'last_activity': time.time(),
-        'ip_address': request.remote_addr,
-        'user_agent': request.headers.get('User-Agent')
-    }
-    # Save session
-    sessions = self.load_sessions()
-    sessions[token] = session
-    self.save_sessions(sessions)
-    return token
 
 @app.route("/")
 def home():
@@ -58,8 +43,8 @@ def login():
         attempts = [t for t in attempts if now - t < 60]
 
         if len(attempts) >= 10:
-            log_event("RATE_LIMIT", username, ip, "Too many attempts")
-            return "Too many login attempts. Try again later."
+            security_log.log_event('RATE_LIMIT',user_id=username,details={'ip': ip, 'reason': 'Too many attempts'})
+            return render_template("login.html", error="Too many login attempts. Try again later.")
 
         attempts.append(now)
         login_attempts[ip] = attempts
@@ -67,12 +52,12 @@ def login():
         user = users.get(username)
         # does user exist
         if not user:
-            log_event("LOGIN_FAILED", username, ip, "User not found")
+            security_log.log_event('LOGIN_FAILED',user_id=None,details={'username': username, 'reason': 'User not found'})
             return render_template("login.html", error="Invalid credentials")
         
         # is user locked out
         if user.get("locked_until") and now < user["locked_until"]:
-            log_event("ACCOUNT_LOCKED", username, ip, "Account still locked")
+            security_log.log_event('ACCOUNT_LOCKED',user_id=username,details={'reason': '5 failed login attempts'},severity='ERROR')
             return render_template("login.html", error="Account locked. Try again later.")
         
         # Implement account lockout after 5 failed attempts (15 minutes)
@@ -81,25 +66,25 @@ def login():
 
             if user["failed_attempts"] >= 5:
                 user["locked_until"] = now + 900
-                log_event("ACCOUNT_LOCKED", username, ip, "5 failed attempts")
+                security_log.log_event('ACCOUNT_LOCKED',user_id=username,details={'reason': '5 failed login attempts'},severity='ERROR')
 
             save_db(users_file, users)
 
-            log_event("LOGIN_FAILED", username, ip, "Wrong password")
+            security_log.log_event('LOGIN_FAILED',user_id=None,details={'username': username, 'reason': 'Invalid password'},severity='WARNING')
 
             return render_template("login.html", error="Invalid credentials")
         
         # login success
-
         user["failed_attempts"] = 0
         user["locked_until"] = None
         save_db(users_file, users)
 
-        # create_session(username)
+        token = session_manager.create_session(username)
+        security_log.log_event('LOGIN_SUCCESS',user_id=username,details={'username': username})
+        response = make_response(redirect('/main'))
+        response.set_cookie('session_token', token, httponly=True, secure=True, samesite='Strict', max_age=1800)
 
-        log_event("LOGIN_SUCCESS", username, ip, "Successful login")
-
-        return render_template("main.html")
+        return response
 
     return render_template("login.html")
 
@@ -144,6 +129,10 @@ def register():
         return redirect(url_for("login"))
 
     return render_template("register.html")
+
+@app.route('/main')
+def main():
+    return render_template('main.html')
 
 
 if __name__ == "__main__":

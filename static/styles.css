@@ -47,3 +47,19 @@ body {
     color: var(--color1);
     text-decoration: underline;
 }
+
+.inner-card {
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid #e5e5e5;
+}
+
+.section-title {
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.empty-text {
+    color: gray;
+    font-size: 14px;
+}

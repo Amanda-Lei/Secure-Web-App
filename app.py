@@ -37,6 +37,10 @@ def load_user_session():
         if session_data:
             users = load_db('data/users.json')
             g.user = users.get(session_data['user_id'])
+        else:
+            g.user = None
+    else:
+        g.user = None
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -90,7 +94,7 @@ def login():
 
         token = session_manager.create_session(username)
         security_log.log_event('LOGIN_SUCCESS',user_id=username,details={'username': username})
-        response = make_response(redirect('/main'))
+        response = make_response(redirect('/dashboard'))
         response.set_cookie('session_token', token, httponly=True, secure=True, samesite='Strict', max_age=1800)
 
         return response
@@ -160,10 +164,10 @@ def require_role(role):
     return decorator
 
 
-@app.route('/main')
+@app.route('/dashboard')
 @require_auth
-def main():
-    return render_template('main.html', user=g.user)
+def dashboard():
+    return render_template('dashboard.html', user=g.user)
 
 @app.route('/admin/dashboard')
 @require_auth

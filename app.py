@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, make_response, g, abort
 import json
 import re
 import html
@@ -6,6 +6,7 @@ import bcrypt
 import time
 import secrets
 from security import EncryptedStorage, SessionManager, SecurityLogger
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -28,6 +29,15 @@ login_attempts = {}  # { ip: timestamps }
 def home():
     return render_template("index.html")
 
+@app.before_request
+def load_user_session():
+    token = request.cookies.get('session_token')
+    if token:
+        session_data = session_manager.validate_session(token)
+        if session_data:
+            users = load_db('data/users.json')
+            g.user = users.get(session_data['user_id'])
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -35,20 +45,19 @@ def login():
         username = html.escape(request.form["username"])
         password = request.form["password"]
 
-        users = load_db(users_file)
-
         # Rate limiting: Max 10 login attempts per IP per minute
         now = time.time()
         attempts = login_attempts.get(ip, [])
         attempts = [t for t in attempts if now - t < 60]
 
         if len(attempts) >= 10:
-            security_log.log_event('RATE_LIMIT',user_id=username,details={'ip': ip, 'reason': 'Too many attempts'})
+            security_log.log_event('RATE_LIMIT',user_id=username,details={'ip': ip, 'attempts': len(attempts), 'reason': 'Too many attempts'})
             return render_template("login.html", error="Too many login attempts. Try again later.")
 
         attempts.append(now)
         login_attempts[ip] = attempts
 
+        users = load_db(users_file)
         user = users.get(username)
         # does user exist
         if not user:
@@ -130,10 +139,37 @@ def register():
 
     return render_template("register.html")
 
-@app.route('/main')
-def main():
-    return render_template('main.html')
+# AUTHORIZATION CHECKS
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user:
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated_function
 
+def require_role(role):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            user = g.user
+            if user['role'] != role:
+                abort(403) # Forbidden
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+@app.route('/main')
+@require_auth
+def main():
+    return render_template('main.html', user=g.user)
+
+@app.route('/admin/dashboard')
+@require_auth
+@require_role('admin')
+def admin_dashboard():
+    return render_template('admin.html')
 
 if __name__ == "__main__":
     app.run(debug=True)

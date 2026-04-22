@@ -106,7 +106,7 @@ def register():
             "email": email,
             "password_hash": hashed.decode('utf-8'),
             "created_at": time.time(),
-            "role": "user",
+            "role": "guest",
             "failed_attempts": 0,
             "locked_until": None
         }

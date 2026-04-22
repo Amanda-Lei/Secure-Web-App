@@ -2,6 +2,7 @@ from flask import Flask, request, g, render_template, redirect, abort
 from functools import wraps
 from security import EncryptedStorage, SessionManager
 from blueprints.accounts import accounts_bp
+from blueprints.documents import documents_bp
 
 app = Flask(__name__)
 
@@ -60,6 +61,7 @@ def set_security_headers(response):
 
 # routes
 app.register_blueprint(accounts_bp)
+app.register_blueprint(documents_bp)
 
 @app.route("/")
 def home():
@@ -68,7 +70,17 @@ def home():
 @app.route('/dashboard')
 @require_auth
 def dashboard():
-    return render_template('dashboard.html', user=g.user)
+    all_docs = storage.load_encrypted("data/documents.json")
+    my_docs = {}
+    shared_docs = {}
+    
+    for doc_id, doc in all_docs.items():
+        if doc['owner'] == g.user['username']:
+            my_docs[doc_id] = doc
+        elif g.user['username'] in doc.get('shared_with', []) or g.user['role'] == 'admin':
+            shared_docs[doc_id] = doc
+            
+    return render_template('dashboard.html', user=g.user, my_docs=my_docs, shared_docs=shared_docs)
 
 @app.route('/admin/dashboard')
 @require_auth

@@ -79,7 +79,7 @@ class SessionManager:
 
         session = sessions[token]
 
-        # Timeout check
+        # Check timeout
         if time.time() - session['last_activity'] > self.timeout:
             self.destroy_session(token)
             return None
@@ -97,8 +97,7 @@ class SessionManager:
 
         if token in sessions:
             del sessions[token]
-
-        self.save_sessions(sessions)
+            self.save_sessions(sessions)
 
 class SecurityLogger:
     def __init__(self, log_dir='logs'):
@@ -131,7 +130,7 @@ class SecurityLogger:
 
         msg = json.dumps(log_entry)
 
-        if event_type == 'DATA_ACCESS':
+        if event_type in ['DATA_ACCESS', 'ACCESS_DENIED','UPLOAD_FAILED']:
             self.acc_logger.info(msg)
         else:
             if severity == 'CRITICAL':

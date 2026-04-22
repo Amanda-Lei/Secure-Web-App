@@ -6,7 +6,7 @@ import io
 import html
 from functools import wraps
 from werkzeug.utils import secure_filename
-from flask import Blueprint, make_response, render_template, request, redirect, abort, g, send_file
+from flask import Blueprint, flash, make_response, request, redirect, abort, g, send_file
 
 from security import EncryptedStorage, SessionManager, SecurityLogger
 
@@ -64,7 +64,8 @@ def upload():
     # no guests, only admins and users
     if g.user['role'] not in ['admin', 'user']:
         security_log.log_event('ACCESS_DENIED', user_id=g.user['username'], details={'reason': 'Insufficient privileges'}, severity='WARNING')
-        return render_template("dashboard.html", error="Insufficient privileges.")
+        flash("Insufficient privileges.", "error")
+        return redirect('/dashboard')
 
     if 'document' not in request.files:
         return redirect('/dashboard')
@@ -73,7 +74,8 @@ def upload():
     # input validation
     if file.filename == '' or not allowed_file(file.filename):
         security_log.log_event('UPLOAD_FAILED', user_id=g.user['username'], details={'reason': 'Invalid file type or empty file'}, severity='WARNING')
-        return render_template("dashboard.html", error="Invalid file type.")
+        flash("Invalid file type.", "error")
+        return redirect('/dashboard')
 
     doc_id = secrets.token_urlsafe(32)
     safe_name = secure_filename(file.filename)
@@ -114,7 +116,8 @@ def download(doc_id):
     
     if not (has_access):
         security_log.log_event('ACCESS_DENIED', user_id=g.user['username'], details={'action': 'download', 'file': doc_id}, severity='WARNING')
-        return render_template("dashboard.html", error="Insufficient privileges.")
+        flash("Insufficient privileges.", "error")
+        return redirect('/dashboard')
         
     try:
         file_path = safe_file_path(doc['safe_filename'], UPLOAD_FOLDER)
@@ -127,7 +130,8 @@ def download(doc_id):
         return send_file(io.BytesIO(decrypted_data),download_name=doc['original_filename'],as_attachment=True)
     
     except FileNotFoundError:
-        return render_template("dashboard.html", error="File corrupted/missing.")
+        flash("File corrupted/missing.", "error")
+        return redirect('/dashboard')
 
 
 @documents_bp.route('/share/<doc_id>', methods=['POST'])
@@ -142,12 +146,15 @@ def share(doc_id):
     # only owner can share
     if not doc or doc['owner'] != g.user['username']:
         security_log.log_event('ACCESS_DENIED', user_id=g.user['username'], details={'action': 'share', 'file': doc_id}, severity='WARNING')
-        return render_template("dashboard.html", error="Insufficient privileges.")
+        flash("Insufficient privileges", "error")
+        return redirect("/dashboard")
         
     if target_user not in users:
-        return render_template("dashboard.html", error="User does not exist.")
+        flash("User does not exist.", "error")
+        return redirect("/dashboard")
+    
     if target_user == g.user['username']:
-        return render_template("dashboard.html")
+        return redirect("/dashboard")
         
     if target_user not in doc.get('shared_with', []):
         doc.setdefault('shared_with', []).append(target_user)
@@ -169,7 +176,8 @@ def delete(doc_id):
 
     if not (can_delete):
         security_log.log_event('ACCESS_DENIED', user_id=g.user['username'], details={'action': 'delete', 'file': doc_id}, severity='WARNING')
-        return render_template("dashboard.html", error="Insufficient privileges.")
+        flash("Insufficient privileges", "error")
+        return redirect("/dashboard")
 
     # delete physical file
     try:

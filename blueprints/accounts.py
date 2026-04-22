@@ -1,4 +1,4 @@
-from flask import Blueprint, request, render_template, redirect, url_for, make_response, g, abort
+from flask import Blueprint, flash, render_template, request, redirect, url_for, make_response, g, abort
 import html
 import re
 import bcrypt
@@ -35,7 +35,8 @@ def login():
 
         if len(attempts) >= 10:
             security_log.log_event('RATE_LIMIT', user_id=username, details={'ip': ip, 'attempts': len(attempts), 'reason': 'Too many attempts'})
-            return render_template("login.html", error="Too many login attempts. Try again later.")
+            flash("Too many login attempts. Try again later.", "error")
+            return redirect("/login")
 
         attempts.append(now)
         login_attempts[ip] = attempts
@@ -45,11 +46,13 @@ def login():
         
         if not user:
             security_log.log_event('LOGIN_FAILED', user_id=None, details={'username': username, 'reason': 'User not found'})
-            return render_template("login.html", error="Invalid credentials")
+            flash("Invalid credentials", "error")
+            return redirect('/login')
         
         if user.get("locked_until") and now < user["locked_until"]:
             security_log.log_event('ACCOUNT_LOCKED', user_id=username, details={'reason': '5 failed login attempts'}, severity='ERROR')
-            return render_template("login.html", error="Account locked. Try again later.")
+            flash("Account locked. Try again later.", "error")
+            return redirect("/login")
         
         if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):    
             user["failed_attempts"] = user.get("failed_attempts", 0) + 1
@@ -59,7 +62,8 @@ def login():
 
             save_db(users_file, users)
             security_log.log_event('LOGIN_FAILED', user_id=None, details={'username': username, 'reason': 'Invalid password'}, severity='WARNING')
-            return render_template("login.html", error="Invalid credentials")
+            flash("Invalid credentials", "error")
+            return redirect("/login")
         
         user["failed_attempts"] = 0
         user["locked_until"] = None
@@ -85,18 +89,24 @@ def register():
         confirm_password = request.form["confirm_password"]
 
         if not re.match(r'^[a-zA-Z0-9_]{3,20}$', username):
-            return render_template("register.html", error="Invalid username format")
+            flash("Invalid username format", "error")
+            return redirect("/register")
         if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
-            return render_template("register.html", error="Invalid email format")
+            flash("Invalid email format", "error")
+            return redirect("/register")
         if password != confirm_password:
-            return render_template("register.html", error="Passwords do not match")
+            flash("Passwords do not match", "error")
+            return redirect("/register")
         if len(password) < 12 or not re.search(r'[A-Z]', password) or not re.search(r'[a-z]', password) or not re.search(r'[0-9]', password) or not re.search(r'[!@#$%^&*]', password):
-            return render_template("register.html", error="Password does not meet requirements")
+            flash("Password does not meet requirements", "error")
+            return redirect("/register")
 
         if username in users:
-            return render_template("register.html", error="Username already exists")
+            flash("Username already exists", "error")
+            return redirect("/register")
         if any(u.get('email') == email for u in users.values()):
-            return render_template("register.html", error="Email already registered")
+            flash("Email already registered", "error")
+            return redirect("/login")
 
         salt = bcrypt.gensalt(rounds=12)
         hashed = bcrypt.hashpw(password.encode('utf-8'), salt)

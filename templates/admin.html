@@ -25,9 +25,15 @@
             <a href="/logout" class="btn btn-outline-danger">Logout</a>
         </div>
 
-        {% if message %}
-            <div class="alert alert-info">{{ message }}</div>
-        {% endif %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
         <div class="row">
             <div class="col-md-4">

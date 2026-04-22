@@ -1,3 +1,4 @@
+import secrets
 from flask import Flask, request, g, render_template, redirect, abort
 from functools import wraps
 from security import EncryptedStorage, SessionManager
@@ -5,6 +6,7 @@ from blueprints.accounts import accounts_bp
 from blueprints.documents import documents_bp
 
 app = Flask(__name__)
+app.secret_key = secrets.token_hex(32)
 
 storage = EncryptedStorage()
 session_manager = SessionManager()

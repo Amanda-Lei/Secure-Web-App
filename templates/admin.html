@@ -11,11 +11,94 @@
 </head>
 <body>
 
-    <div class="main-container">
-        <div class="card-box text-center">
-            <h1 class="title">Hi Admin!</h1>
+<div class="main-container">
+    <div class="card-box">
+
+        <div class="header-row d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="title dashboard-title">{{ user.username }}</h2>
+                <p class="badge bg-secondary user-role">
+                    Role: {{ user.role }}
+                </p>
+            </div>
+
+            <a href="/logout" class="btn btn-outline-danger">Logout</a>
+        </div>
+
+        {% if message %}
+            <div class="alert alert-info">{{ message }}</div>
+        {% endif %}
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="inner-card">
+                    <h5 class="section-title">Upload Document</h5>
+
+                    <form action="/upload" method="POST" enctype="multipart/form-data">
+                        <input type="file" name="document" class="form-control mb-3" required>
+                        <button type="submit" class="btn btn-primary w-100">
+                            Upload
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="inner-card">
+                    <h5 class="section-title">
+                        {% if user.role == 'admin' %}
+                            All Documents
+                        {% else %}
+                            My Documents
+                        {% endif %}
+                    </h5>
+
+                    {% if docs %}
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>File</th>
+                                    <th>Owner</th>
+                                    <th>Shared With</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc_id, doc in docs.items() %}
+                                <tr>
+                                    <td>{{ doc.original_filename }}</td>
+                                    <td>{{ doc.owner }}</td>
+                                    <td>
+                                        {{ doc.shared_with | join(', ') if doc.shared_with else 'None' }}
+                                    </td>
+                                    <td>
+                                        <a href="/download/{{ doc_id }}" class="btn btn-sm btn-success">Download</a>
+
+                                        {% if user.role != 'admin' %}
+                                        <form action="/share/{{ doc_id }}" method="POST" class="share-form">
+                                            <input type="text" name="share_username" placeholder="user" class="form-control form-control-sm share-input">
+                                            <button class="btn btn-sm btn-warning">Share</button>
+                                        </form>
+                                        {% endif %}
+
+                                        <form action="/delete/{{ doc_id }}" method="POST" class="delete-form">
+                                            <button class="btn btn-sm btn-danger">Delete</button>
+                                        </form>
+
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="empty-text">No documents found.</p>
+                    {% endif %}
+                </div>
+            </div>
+
         </div>
     </div>
+</div>
 
 </body>
 </html>

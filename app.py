@@ -71,13 +71,18 @@ def home():
 @require_auth
 def dashboard():
     all_docs = storage.load_encrypted("data/documents.json")
+
+    # admin view
+    if g.user['role'] == 'admin':
+        return render_template('admin.html', user=g.user, docs=all_docs)
+    
     my_docs = {}
     shared_docs = {}
     
     for doc_id, doc in all_docs.items():
         if doc['owner'] == g.user['username']:
             my_docs[doc_id] = doc
-        elif g.user['username'] in doc.get('shared_with', []) or g.user['role'] == 'admin':
+        elif g.user['username'] in doc.get('shared_with', []):
             shared_docs[doc_id] = doc
             
     return render_template('dashboard.html', user=g.user, my_docs=my_docs, shared_docs=shared_docs)

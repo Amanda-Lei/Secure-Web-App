@@ -78,7 +78,7 @@ def upload():
     doc_id = secrets.token_urlsafe(32)
     safe_name = secure_filename(file.filename)
     storage_filename = f"{doc_id}.enc"
-    save_path = safe_file_path(storage_filename)
+    save_path = safe_file_path(storage_filename, UPLOAD_FOLDER)
     
     file_data = file.read()
     encrypted_data = storage.cipher.encrypt(file_data) 
@@ -117,7 +117,7 @@ def download(doc_id):
         return render_template("dashboard.html", error="Insufficient privileges.")
         
     try:
-        file_path = safe_file_path(doc['safe_filename'])
+        file_path = safe_file_path(doc['safe_filename'], UPLOAD_FOLDER)
         with open(file_path, 'rb') as f:
             encrypted_data = f.read()
             
@@ -154,6 +154,37 @@ def share(doc_id):
         save_db(docs_file, documents)
         security_log.log_event('DATA_ACCESS', user_id=g.user['username'], details={'action': 'share', 'file': doc['original_filename'], 'target': target_user})
         
+    return redirect('/dashboard')
+
+@documents_bp.route('/delete/<doc_id>', methods=['POST'])
+@require_auth
+def delete(doc_id):
+    documents = load_db(docs_file)
+    doc = documents.get(doc_id)
+
+    if not doc:
+        abort(404)
+
+    can_delete = doc['owner'] == g.user['username'] or g.user['role'] == 'admin'
+
+    if not (can_delete):
+        security_log.log_event('ACCESS_DENIED', user_id=g.user['username'], details={'action': 'delete', 'file': doc_id}, severity='WARNING')
+        return render_template("dashboard.html", error="Insufficient privileges.")
+
+    # delete physical file
+    try:
+        file_path = os.path.join("data/files", doc['safe_filename'])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception:
+        pass
+
+    # delete metadata
+    del documents[doc_id]
+    save_db(docs_file, documents)
+
+    security_log.log_event('DATA_ACCESS', user_id=g.user['username'], details={'action': 'delete', 'file': doc['original_filename']})
+
     return redirect('/dashboard')
 
 @documents_bp.route('/logout')

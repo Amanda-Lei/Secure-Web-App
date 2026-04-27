@@ -1,3 +1,4 @@
+import os
 import secrets
 from flask import Flask, request, g, render_template, redirect, abort
 from functools import wraps
@@ -7,6 +8,7 @@ from blueprints.documents import documents_bp
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB limit
 
 storage = EncryptedStorage()
 session_manager = SessionManager()
@@ -56,10 +58,26 @@ def set_security_headers(response):
     )
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
+
+@app.before_request
+def require_https():
+    if not request.is_secure and app.env != "development":
+        url = request.url.replace("http://", "https://", 1)
+        return redirect(url, code=301)
+
+# if jsons haven't been initialized
+def initialize_db(path):
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        storage.save_encrypted(path, {})
+
+initialize_db("data/users.json")
+initialize_db("data/sessions.json")
+initialize_db("data/documents.json")
 
 # routes
 app.register_blueprint(accounts_bp)
@@ -97,4 +115,4 @@ def admin_dashboard():
     return render_template('admin.html')
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(ssl_context=('cert.pem', 'key.pem'), host='0.0.0.0', port=5000)

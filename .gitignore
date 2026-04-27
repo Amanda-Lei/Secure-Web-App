@@ -1,2 +1,5 @@
 /data
 /logs
+cert.pem
+key.pem
+secret.key

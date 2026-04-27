@@ -181,7 +181,7 @@ def delete(doc_id):
 
     # delete physical file
     try:
-        file_path = os.path.join("data/files", doc['safe_filename'])
+        file_path = os.path.join(UPLOAD_FOLDER, doc['safe_filename'])
         if os.path.exists(file_path):
             os.remove(file_path)
     except Exception:

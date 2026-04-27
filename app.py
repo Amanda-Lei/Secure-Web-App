@@ -73,10 +73,11 @@ def home():
 @require_auth
 def dashboard():
     all_docs = storage.load_encrypted("data/documents.json")
+    all_users = storage.load_encrypted("data/users.json")
 
     # admin view
     if g.user['role'] == 'admin':
-        return render_template('admin.html', user=g.user, docs=all_docs)
+        return render_template('admin.html', user=g.user, docs=all_docs, users=all_users)
     
     my_docs = {}
     shared_docs = {}

@@ -132,3 +132,67 @@ def register():
         return redirect(url_for("accounts.login")) 
 
     return render_template("register.html")
+
+@accounts_bp.route('/toggle_user/<username>', methods=['POST'])
+def toggle_user(username):
+    if not g.user or g.user['role'] != 'admin':
+        flash("Unauthorized", "error")
+        return redirect('/dashboard')
+
+    users = load_db(users_file)
+
+    if username not in users:
+        flash("User not found", "error")
+        return redirect('/dashboard')
+
+    if username == g.user['username']:
+        flash("You cannot disable yourself", "error")
+        return redirect('/dashboard')
+
+    users[username]['active'] = not users[username].get('active', True)
+    save_db(users_file, users)
+
+    status = "enabled" if users[username]['active'] else "disabled"
+
+    security_log.log_event(
+        'DATA_ACCESS',
+        user_id=g.user['username'],
+        details={'action': 'toggle_user', 'target': username, 'status': status}
+    )
+
+    flash(f"User {username} {status}", "info")
+    return redirect('/dashboard')
+
+@accounts_bp.route('/update_role/<username>', methods=['POST'])
+def update_role(username):
+    if not g.user or g.user['role'] != 'admin':
+        flash("Unauthorized", "error")
+        return redirect('/dashboard')
+
+    new_role = request.form.get('role')
+
+    if new_role not in ['guest', 'user', 'admin']:
+        flash("Invalid role", "error")
+        return redirect('/dashboard')
+
+    users = load_db(users_file)
+
+    if username not in users:
+        flash("User not found", "error")
+        return redirect('/dashboard')
+
+    if username == g.user['username']:
+        flash("You cannot change your own role", "error")
+        return redirect('/dashboard')
+
+    users[username]['role'] = new_role
+    save_db(users_file, users)
+
+    security_log.log_event(
+        'DATA_ACCESS',
+        user_id=g.user['username'],
+        details={'action': 'update_role', 'target': username, 'role': new_role}
+    )
+
+    flash(f"{username} is now {new_role}", "success")
+    return redirect('/dashboard')

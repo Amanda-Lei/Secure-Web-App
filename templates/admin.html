@@ -52,11 +52,7 @@
             <div class="col-md-8">
                 <div class="inner-card">
                     <h5 class="section-title">
-                        {% if user.role == 'admin' %}
                             All Documents
-                        {% else %}
-                            My Documents
-                        {% endif %}
                     </h5>
 
                     {% if docs %}
@@ -80,13 +76,6 @@
                                     <td>
                                         <a href="/download/{{ doc_id }}" class="btn btn-sm btn-success">Download</a>
 
-                                        {% if user.role != 'admin' %}
-                                        <form action="/share/{{ doc_id }}" method="POST" class="share-form">
-                                            <input type="text" name="share_username" placeholder="user" class="form-control form-control-sm share-input">
-                                            <button class="btn btn-sm btn-warning">Share</button>
-                                        </form>
-                                        {% endif %}
-
                                         <form action="/delete/{{ doc_id }}" method="POST" class="delete-form">
                                             <button class="btn btn-sm btn-danger">Delete</button>
                                         </form>
@@ -100,11 +89,99 @@
                         <p class="empty-text">No documents found.</p>
                     {% endif %}
                 </div>
+
+                <!-- Manage Users -->
+                <div class="inner-card mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="section-title mb-0">Manage Users</h5>
+                        <input type="text" id="userSearch" class="form-control w-50" placeholder="Search by user/role/status" onkeyup="filterUsers()">
+                    </div>
+
+                    {% if users %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle" id="userList">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for username, u in users.items() %}
+                                <tr class="user-item">
+                                    <td>
+                                        <strong>{{ username }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge role-badge bg-secondary">{{ u.role }}</span>
+                                    </td>
+                                    <td>
+                                        {% if u.active %}
+                                            <span class="badge status-badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge status-badge bg-danger">Disabled</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if username != user.username %}
+                                        <div class="d-flex justify-content-end gap-2 flex-wrap">
+
+                                            <!-- Roles -->
+                                            <form action="/update_role/{{ username }}" method="POST" class="d-flex gap-2">
+                                                <select name="role" class="form-select form-select-sm">
+                                                    <option value="guest" {% if u.role == 'guest' %}selected{% endif %}>guest</option>
+                                                    <option value="user" {% if u.role == 'user' %}selected{% endif %}>user</option>
+                                                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+                                                </select>
+                                                <button class="btn btn-sm btn-outline-primary">Save</button>
+                                            </form>
+
+                                            <!-- Enable/Disable -->
+                                            <form action="/toggle_user/{{ username }}" method="POST">
+                                                <button class="btn btn-sm {% if u.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                    {% if u.active %}Disable{% else %}Enable{% endif %}
+                                                </button>
+                                            </form>
+
+                                        </div>
+                                        {% endif %}
+                                    </td>
+
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                        <p class="empty-text">No users found.</p>
+                    {% endif %}
+                </div>
+
             </div>
 
         </div>
     </div>
 </div>
+
+<!-- User Search -->
+<script>
+function filterUsers() {
+    const input = document.getElementById("userSearch").value.toLowerCase();
+    const users = document.getElementsByClassName("user-item");
+
+    for (let i = 0; i < users.length; i++) {
+        const username = users[i].querySelector("strong").innerText.toLowerCase();
+        const role = users[i].querySelector(".role-badge").innerText.toLowerCase();
+        const status = users[i].querySelector(".status-badge").innerText.toLowerCase();
+
+        const matches = username.includes(input) || role.includes(input) || status.includes(input);
+
+        users[i].style.display = matches ? "" : "none";
+    }
+}
+</script>
 
 </body>
 </html>

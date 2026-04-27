@@ -54,6 +54,10 @@ def login():
             flash("Account locked. Try again later.", "error")
             return redirect("/login")
         
+        if not user.get("active", True):
+            flash("Account is disabled.", "error")
+            return redirect("/login")
+        
         if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):    
             user["failed_attempts"] = user.get("failed_attempts", 0) + 1
             if user["failed_attempts"] >= 5:
@@ -117,6 +121,7 @@ def register():
             "password_hash": hashed.decode('utf-8'),
             "created_at": time.time(),
             "role": "guest",
+            "active": True,
             "failed_attempts": 0,
             "locked_until": None
         }

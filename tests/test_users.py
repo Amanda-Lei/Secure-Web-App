@@ -14,6 +14,7 @@ users = {
         "email": "amanda@test.com",
         "password_hash": hash_pw("I1!qwertyuiop"),
         "role": "user",
+        "active": True,
         "failed_attempts": 0,
         "locked_until": None,
         "created_at": time.time()
@@ -23,6 +24,7 @@ users = {
         "email": "chris@test.com",
         "password_hash": hash_pw("Ilovecompsec123!"),
         "role": "user",
+        "active": True,
         "failed_attempts": 0,
         "locked_until": None,
         "created_at": time.time()
@@ -32,6 +34,17 @@ users = {
         "email": "admin@test.com",
         "password_hash": hash_pw("Password123!"),
         "role": "admin",
+        "active": True,
+        "failed_attempts": 0,
+        "locked_until": None,
+        "created_at": time.time()
+    },
+    "old": {
+        "username": "old",
+        "email": "old@test.com",
+        "password_hash": hash_pw("Disabled123!"),
+        "role": "user",
+        "active": False,
         "failed_attempts": 0,
         "locked_until": None,
         "created_at": time.time()
